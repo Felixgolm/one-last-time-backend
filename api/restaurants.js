@@ -1,19 +1,11 @@
-import axios from 'axios';
+const express = require('express');
+const axios = require('axios');
+require('dotenv').config();
 
+const router = express.Router();
 const GOOGLE_API_KEY = process.env.GOOGLE_PLACES_API_KEY;
 
-export default async function handler(req, res) {
-  // CORS headers
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
-
-  if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
-  }
-
+router.get('/restaurants', async (req, res) => {
   try {
     const { query, type } = req.query;
 
@@ -21,18 +13,39 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Query parameter required' });
     }
 
-    if (type === 'restaurants') {
-      // Buscar restaurantes en una ciudad
-      const response = await axios.get(
-        `https://maps.googleapis.com/maps/api/place/textsearch/json`,
-        {
-          params: {
-            query: `restaurants in ${query} Spain`,
-            key: GOOGLE_API_KEY,
-            type: 'restaurant'
-          }
+    if (type === 'cities') {
+      const response = await axios.get('https://maps.googleapis.com/maps/api/place/autocomplete/json', {
+        params: {
+          input: query,
+          componentRestrictions: { country: 'es' },
+          key: GOOGLE_API_KEY
         }
-      );
+      });
+
+      const results = response.data.predictions
+        .slice(0, 10)
+        .map(place => {
+          const parts = place.description.split(', ');
+          const city = parts[0];
+          const province = parts[parts.length - 2] || '';
+          return {
+            name: city,
+            fullName: place.description,
+            placeId: place.place_id
+          };
+        });
+
+      return res.status(200).json({
+        success: true,
+        data: results
+      });
+    } else if (type === 'restaurants') {
+      const response = await axios.get('https://maps.googleapis.com/maps/api/place/textsearch/json', {
+        params: {
+          query: `restaurants in ${query} Spain`,
+          key: GOOGLE_API_KEY
+        }
+      });
 
       const results = response.data.results
         .slice(0, 10)
@@ -44,12 +57,18 @@ export default async function handler(req, res) {
           photoUrl: place.photos?.[0] ? `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=${place.photos[0].photo_reference}&key=${GOOGLE_API_KEY}` : null
         }));
 
-      return res.status(200).json({ success: true, data: results });
+      return res.status(200).json({
+        success: true,
+        data: results
+      });
     }
-
-    res.status(400).json({ error: 'Invalid type parameter' });
   } catch (error) {
     console.error('Error:', error.message);
-    res.status(500).json({ error: 'Error fetching data from Google Places', details: error.message });
+    return res.status(500).json({
+      error: 'Error fetching data from Google Places API',
+      details: error.message
+    });
   }
-}
+});
+
+module.exports = router;
