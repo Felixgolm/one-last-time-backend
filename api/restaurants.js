@@ -27,9 +27,9 @@ router.get('/restaurants', async (req, res) => {
       const results = response.data.predictions
         .slice(0, 10)
         .map(place => {
-          const parts = place.description.split(', ');
-          const city = parts[0];
-          const province = parts.length > 2 ? parts[1] : '';
+          const terms = place.terms || [];
+          const city = terms[0] ? terms[0].value : place.description.split(',')[0].trim();
+          const province = terms.length > 2 ? terms[1].value : '';
           return {
             name: city,
             province: province,
@@ -43,26 +43,31 @@ router.get('/restaurants', async (req, res) => {
         data: results
       });
     } else if (type === 'restaurants') {
-      const searchCity = city || query;
-      const searchQuery = city ? `${query} restaurant ${city}` : `restaurants in ${query} Spain`;
+      const searchCity = city || '';
+      const searchQuery = searchCity ? `${query} restaurante en ${searchCity}` : `restaurante ${query}`;
 
       const response = await axios.get('https://maps.googleapis.com/maps/api/place/textsearch/json', {
         params: {
           query: searchQuery,
+          type: 'restaurant',
           language: 'es',
           region: 'es',
           key: GOOGLE_API_KEY
         }
       });
 
-      const results = response.data.results
+      const cityLower = searchCity.toLowerCase();
+      const filtered = searchCity
+        ? response.data.results.filter(place => place.formatted_address.toLowerCase().includes(cityLower))
+        : response.data.results;
+
+      const results = filtered
         .slice(0, 10)
         .map(place => ({
           name: place.name,
           address: place.formatted_address,
-          rating: place.rating || 'N/A',
-          placeId: place.place_id,
-          photoUrl: place.photos?.[0] ? `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=${place.photos[0].photo_reference}&key=${GOOGLE_API_KEY}` : null
+          rating: place.rating || null,
+          placeId: place.place_id
         }));
 
       return res.status(200).json({
