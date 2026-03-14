@@ -14,46 +14,48 @@ router.get('/restaurants', async (req, res) => {
     }
 
     if (type === 'cities') {
-      const isPostalCode = /^\d{3,}$/.test(query.trim());
+      const trimmed = query.trim();
+      const isExactPostalCode = /^\d{5}$/.test(trimmed);
+      const isTooManyDigits = /^\d{6,}$/.test(trimmed);
 
-      if (isPostalCode) {
+      if (isTooManyDigits) {
+        return res.status(200).json({ success: true, data: [] });
+      }
+
+      if (isExactPostalCode) {
         const response = await axios.get('https://maps.googleapis.com/maps/api/geocode/json', {
           params: {
-            address: query,
+            address: trimmed,
             components: 'country:ES',
             language: 'es',
             key: GOOGLE_API_KEY
           }
         });
 
-        const results = response.data.results
-          .slice(0, 5)
-          .map(result => {
-            const cityComponent = result.address_components.find(c => c.types.includes('locality'));
-            const postalComponent = result.address_components.find(c => c.types.includes('postal_code'));
-            const provinceComponent = result.address_components.find(c => c.types.includes('administrative_area_level_2'));
-            const cityName = cityComponent ? cityComponent.long_name : '';
-            const postalCode = postalComponent ? postalComponent.long_name : query;
-            const province = provinceComponent ? provinceComponent.long_name : '';
+        const results = response.data.results.map(result => {
+          const cityComponent = result.address_components.find(c => c.types.includes('locality'));
+          const postalComponent = result.address_components.find(c => c.types.includes('postal_code'));
+          const provinceComponent = result.address_components.find(c => c.types.includes('administrative_area_level_2'));
+          const cityName = cityComponent ? cityComponent.long_name : '';
+          const postalCode = postalComponent ? postalComponent.long_name : trimmed;
+          const province = provinceComponent ? provinceComponent.long_name : '';
 
-            return {
-              name: cityName,
-              province: province,
-              postalCode: postalCode,
-              displayName: `${cityName} (${postalCode})`,
-              fullName: result.formatted_address,
-              placeId: result.place_id
-            };
-          });
-
-        return res.status(200).json({
-          success: true,
-          data: results
+          return {
+            name: `${cityName}, ${postalCode}`,
+            province: province,
+            postalCode: postalCode,
+            displayName: postalCode,
+            subtitle: cityName,
+            fullName: result.formatted_address,
+            placeId: result.place_id
+          };
         });
+
+        return res.status(200).json({ success: true, data: results });
       } else {
         const response = await axios.get('https://maps.googleapis.com/maps/api/place/autocomplete/json', {
           params: {
-            input: query,
+            input: trimmed,
             components: 'country:es',
             types: '(regions)',
             language: 'es',
@@ -61,26 +63,22 @@ router.get('/restaurants', async (req, res) => {
           }
         });
 
-        const results = response.data.predictions
-          .slice(0, 10)
-          .map(place => {
-            const parts = place.description.split(', ');
-            const city = parts[0];
-            const province = parts.length > 2 ? parts[1] : '';
-            return {
-              name: city,
-              province: province,
-              postalCode: null,
-              displayName: city,
-              fullName: place.description,
-              placeId: place.place_id
-            };
-          });
-
-        return res.status(200).json({
-          success: true,
-          data: results
+        const results = response.data.predictions.map(place => {
+          const parts = place.description.split(', ');
+          const name = parts[0];
+          const province = parts.length > 2 ? parts[1] : '';
+          return {
+            name: name,
+            province: province,
+            postalCode: null,
+            displayName: name,
+            subtitle: province,
+            fullName: place.description,
+            placeId: place.place_id
+          };
         });
+
+        return res.status(200).json({ success: true, data: results });
       }
     } else if (type === 'restaurants') {
       const searchCity = city || query;
@@ -95,19 +93,14 @@ router.get('/restaurants', async (req, res) => {
         }
       });
 
-      const results = response.data.results
-        .slice(0, 10)
-        .map(place => ({
-          name: place.name,
-          address: place.formatted_address,
-          rating: place.rating || 'N/A',
-          placeId: place.place_id
-        }));
+      const results = response.data.results.map(place => ({
+        name: place.name,
+        address: place.formatted_address,
+        rating: place.rating || 'N/A',
+        placeId: place.place_id
+      }));
 
-      return res.status(200).json({
-        success: true,
-        data: results
-      });
+      return res.status(200).json({ success: true, data: results });
     }
   } catch (error) {
     console.error('Error:', error.message);
