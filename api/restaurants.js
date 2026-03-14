@@ -17,7 +17,9 @@ router.get('/restaurants', async (req, res) => {
       const response = await axios.get('https://maps.googleapis.com/maps/api/place/autocomplete/json', {
         params: {
           input: query,
-          componentRestrictions: { country: 'es' },
+          components: 'country:es',
+          types: '(cities)',
+          language: 'es',
           key: GOOGLE_API_KEY
         }
       });
@@ -27,7 +29,6 @@ router.get('/restaurants', async (req, res) => {
         .map(place => {
           const parts = place.description.split(', ');
           const city = parts[0];
-          const province = parts[parts.length - 2] || '';
           return {
             name: city,
             fullName: place.description,
