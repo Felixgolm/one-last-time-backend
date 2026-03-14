@@ -28,10 +28,15 @@ router.get('/restaurants', async (req, res) => {
         .slice(0, 10)
         .map(place => {
           const terms = place.terms || [];
-          const city = terms[0] ? terms[0].value : place.description.split(',')[0].trim();
-          const province = terms.length > 2 ? terms[1].value : '';
+          const cityName = terms[0] ? terms[0].value : place.description.split(',')[0].trim();
+          let province = '';
+          if (terms.length >= 3) {
+            province = terms[1].value;
+          } else if (terms.length === 2 && terms[1].value !== 'España') {
+            province = terms[1].value;
+          }
           return {
-            name: city,
+            name: cityName,
             province: province,
             fullName: place.description,
             placeId: place.place_id
