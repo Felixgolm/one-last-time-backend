@@ -1,0 +1,7 @@
+{
+  "version": 2,
+  "env": {
+    "GOOGLE_PLACES_API_KEY": "@google_places_api_key"
+  },
+  "buildCommand": "npm install"
+}

@@ -1,0 +1,15 @@
+{
+  "name": "sensibles-backend",
+  "version": "1.0.0",
+  "description": "Backend para Sensibles - búsqueda de ciudades y restaurantes",
+  "main": "api/index.js",
+  "scripts": {
+    "dev": "vercel dev",
+    "deploy": "vercel --prod"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.0.0"
+  }
+}
