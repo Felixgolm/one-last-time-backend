@@ -7,7 +7,7 @@ const GOOGLE_API_KEY = process.env.GOOGLE_PLACES_API_KEY;
 
 router.get('/restaurants', async (req, res) => {
   try {
-    const { query, type } = req.query;
+    const { query, type, city } = req.query;
 
     if (!query) {
       return res.status(400).json({ error: 'Query parameter required' });
@@ -29,8 +29,10 @@ router.get('/restaurants', async (req, res) => {
         .map(place => {
           const parts = place.description.split(', ');
           const city = parts[0];
+          const province = parts.length > 2 ? parts[1] : '';
           return {
             name: city,
+            province: province,
             fullName: place.description,
             placeId: place.place_id
           };
@@ -41,9 +43,14 @@ router.get('/restaurants', async (req, res) => {
         data: results
       });
     } else if (type === 'restaurants') {
+      const searchCity = city || query;
+      const searchQuery = city ? `${query} restaurant ${city}` : `restaurants in ${query} Spain`;
+
       const response = await axios.get('https://maps.googleapis.com/maps/api/place/textsearch/json', {
         params: {
-          query: `restaurants in ${query} Spain`,
+          query: searchQuery,
+          language: 'es',
+          region: 'es',
           key: GOOGLE_API_KEY
         }
       });
