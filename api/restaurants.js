@@ -14,64 +14,93 @@ router.get('/restaurants', async (req, res) => {
     }
 
     if (type === 'cities') {
-      const response = await axios.get('https://maps.googleapis.com/maps/api/place/autocomplete/json', {
-        params: {
-          input: query,
-          components: 'country:es',
-          types: '(cities)',
-          language: 'es',
-          key: GOOGLE_API_KEY
-        }
-      });
+      const isPostalCode = /^\d{3,}$/.test(query.trim());
 
-      const results = response.data.predictions
-        .slice(0, 10)
-        .map(place => {
-          const terms = place.terms || [];
-          const cityName = terms[0] ? terms[0].value : place.description.split(',')[0].trim();
-          let province = '';
-          if (terms.length >= 3) {
-            province = terms[1].value;
-          } else if (terms.length === 2 && terms[1].value !== 'España') {
-            province = terms[1].value;
+      if (isPostalCode) {
+        const response = await axios.get('https://maps.googleapis.com/maps/api/geocode/json', {
+          params: {
+            address: query,
+            components: 'country:ES',
+            language: 'es',
+            key: GOOGLE_API_KEY
           }
-          return {
-            name: cityName,
-            province: province,
-            fullName: place.description,
-            placeId: place.place_id
-          };
         });
 
-      return res.status(200).json({
-        success: true,
-        data: results
-      });
+        const results = response.data.results
+          .slice(0, 5)
+          .map(result => {
+            const cityComponent = result.address_components.find(c => c.types.includes('locality'));
+            const postalComponent = result.address_components.find(c => c.types.includes('postal_code'));
+            const provinceComponent = result.address_components.find(c => c.types.includes('administrative_area_level_2'));
+            const cityName = cityComponent ? cityComponent.long_name : '';
+            const postalCode = postalComponent ? postalComponent.long_name : query;
+            const province = provinceComponent ? provinceComponent.long_name : '';
+
+            return {
+              name: cityName,
+              province: province,
+              postalCode: postalCode,
+              displayName: `${cityName} (${postalCode})`,
+              fullName: result.formatted_address,
+              placeId: result.place_id
+            };
+          });
+
+        return res.status(200).json({
+          success: true,
+          data: results
+        });
+      } else {
+        const response = await axios.get('https://maps.googleapis.com/maps/api/place/autocomplete/json', {
+          params: {
+            input: query,
+            components: 'country:es',
+            types: '(regions)',
+            language: 'es',
+            key: GOOGLE_API_KEY
+          }
+        });
+
+        const results = response.data.predictions
+          .slice(0, 10)
+          .map(place => {
+            const parts = place.description.split(', ');
+            const city = parts[0];
+            const province = parts.length > 2 ? parts[1] : '';
+            return {
+              name: city,
+              province: province,
+              postalCode: null,
+              displayName: city,
+              fullName: place.description,
+              placeId: place.place_id
+            };
+          });
+
+        return res.status(200).json({
+          success: true,
+          data: results
+        });
+      }
     } else if (type === 'restaurants') {
-      const searchCity = city || '';
-      const searchQuery = searchCity ? `${query} restaurante en ${searchCity}` : `restaurante ${query}`;
+      const searchCity = city || query;
+      const searchQuery = city ? `${query} restaurant ${city}` : `restaurants in ${query} Spain`;
 
       const response = await axios.get('https://maps.googleapis.com/maps/api/place/textsearch/json', {
         params: {
           query: searchQuery,
-          type: 'restaurant',
           language: 'es',
           region: 'es',
           key: GOOGLE_API_KEY
         }
       });
 
-      const cityLower = searchCity.toLowerCase();
-      const filtered = searchCity
-        ? response.data.results.filter(place => place.formatted_address.toLowerCase().includes(cityLower))
-        : response.data.results;
-
-      const results = filtered
+      const results = response.data.results
         .slice(0, 10)
         .map(place => ({
           name: place.name,
           address: place.formatted_address,
-          rating: place.rating || null,
+          rating: place.rating || 'N/A',
           placeId: place.place_id
         }));
 
